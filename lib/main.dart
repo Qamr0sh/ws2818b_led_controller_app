@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:ws2812b_panel_controller_app/Dashboard/UI/dasboard_screen.dart';
+import 'package:ws2812b_panel_controller_app/PanelControls/Dependencies/panel_controls_binding.dart';
+import 'package:ws2812b_panel_controller_app/PanelControls/UI/panel_controls_screen.dart';
 import 'Dashboard/Dependencies/dashboard_binding.dart';
 import 'Resources/app_theme.dart';
 
@@ -19,6 +21,7 @@ class MyApp extends StatelessWidget {
       initialRoute: "/",
       getPages: [
         GetPage(name: "/", page: () => DashboardScreen(), binding: DashboardBinding()),
+        GetPage(name: "/panel", page: () => PanelControlsScreen(), binding: PanelControlBinding()),
       ],
       theme: appTheme,
     );

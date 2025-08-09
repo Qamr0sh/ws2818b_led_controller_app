@@ -25,6 +25,7 @@ class DashboardController extends GetxController {
   RxnString noNetworkError = RxnString();
   CustomNetworkInfoModel networkInfo =
   CustomNetworkInfoModel(wifiName: "", ip: "", subnet: "");
+  var isLoading = false.obs;
 
   GetNetworkInfoUseCase getNetworkInfoUseCase;
 
@@ -53,6 +54,7 @@ class DashboardController extends GetxController {
   }
 
   void startScan() async {
+    isLoading.value = true;
     String? localIp = networkInfo.ip; // e.g., 10.10.10.45
     String? subnetMask = networkInfo.subnet; // e.g., 255.255.255.192
 
@@ -93,6 +95,7 @@ class DashboardController extends GetxController {
       _scanIp(ip);
       await Future.delayed(const Duration(milliseconds: 50));
     }
+    isLoading.value = false;
   }
 
   Future<void> _scanIp(String ip) async {
@@ -126,5 +129,9 @@ class DashboardController extends GetxController {
       foundDevices.add(FoundDevice(ip: ip, infoMap: deviceInfo));
       socket.destroy();
     } catch (_) {}
+  }
+
+  void openLightControllers(int index){
+      Get.toNamed("/panel", arguments: {"device": foundDevices[index]});
   }
 }

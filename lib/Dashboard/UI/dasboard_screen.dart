@@ -43,6 +43,7 @@ class DashboardScreen extends GetView<DashboardController> {
                         : "Scan Again",
                     onTap: controller.startScan,
                     backgroundColor: AppColors.primaryColor,
+                    isLoading: controller.isLoading
                   ),
                 ),
               ),
@@ -128,8 +129,7 @@ class DashboardScreen extends GetView<DashboardController> {
                                     color: AppColors.primaryColor,
                                   ),
                                   onPressed: () {
-                                    // Handle device tap
-                                    // Get.to(() => DeviceDetailScreen(device: device));
+                                    controller.openLightControllers(index);
                                   },
                                 ),
                               ],
