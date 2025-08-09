@@ -8,7 +8,7 @@ plugins {
 android {
     namespace = "com.example.ws2812b_panel_controller_app"
     compileSdk = flutter.compileSdkVersion
-    ndkVersion = flutter.ndkVersion
+    ndkVersion = "27.0.12077973"
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
