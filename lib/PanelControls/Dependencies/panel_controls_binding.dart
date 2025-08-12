@@ -4,6 +4,6 @@ import 'package:ws2812b_panel_controller_app/PanelControls/UI/panel_controller.d
 class PanelControlBinding extends Bindings{
   @override
   void dependencies() {
-    Get.lazyPut<PanelController>(()=>PanelController());
+    Get.put<PanelController>(PanelController(), permanent: true);
   }
 }
