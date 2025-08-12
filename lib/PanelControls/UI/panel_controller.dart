@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
+import 'dart:math' as math;
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:ws2812b_panel_controller_app/Resources/app_colors.dart';
@@ -30,9 +32,91 @@ class PanelController extends GetxController {
 
   late final List<List<LightState>> gridState; // [row][col]
   final Rx<Color> selectedColor = Colors.white.obs;
+  final RxString currentEffect = 'None'.obs;
+  final RxBool isEffectRunning = false.obs;
+  Timer? _effectTimer;
+  
+  // Available effects
+  final List<String> effects = [
+    'None', 
+    'Rainbow', 
+    'Fire', 
+    'Color Wipe', 
+    'Theater Chase', 
+    'Scanner',
+    'Heart',
+    'Smile',
+    'Star',
+    'Pac-Man',
+    'Mario'
+  ];
+
+  // Effect parameters
+  final RxInt effectSpeed = 100.obs; // ms between updates
+  final Rx<Color> effectColor = Colors.blue.obs;
 
   // Custom LED mapping: maps UI position (row, col) to physical LED index
   late final List<List<int>> customLedMap;
+
+  // Pixel art patterns
+  final Map<String, List<List<int>>> _pixelArt = {
+    'Heart': [
+      [0, 1, 0, 0, 0, 1, 0],
+      [1, 1, 1, 0, 1, 1, 1],
+      [1, 1, 1, 1, 1, 1, 1],
+      [0, 1, 1, 1, 1, 1, 0],
+      [0, 0, 1, 1, 1, 0, 0],
+      [0, 0, 0, 1, 0, 0, 0],
+    ],
+    'Smile': [
+      [0, 0, 1, 1, 1, 1, 0, 0],
+      [0, 1, 0, 0, 0, 0, 1, 0],
+      [1, 0, 1, 0, 0, 1, 0, 1],
+      [1, 0, 0, 0, 0, 0, 0, 1],
+      [1, 0, 1, 0, 0, 1, 0, 1],
+      [1, 0, 0, 1, 1, 0, 0, 1],
+      [0, 1, 0, 0, 0, 0, 1, 0],
+      [0, 0, 1, 1, 1, 1, 0, 0],
+    ],
+    'Star': [
+      [0, 0, 0, 1, 0, 0, 0],
+      [0, 0, 1, 1, 1, 0, 0],
+      [1, 1, 1, 1, 1, 1, 1],
+      [0, 1, 1, 1, 1, 1, 0],
+      [0, 0, 1, 1, 1, 0, 0],
+      [0, 1, 0, 0, 0, 1, 0],
+      [1, 0, 0, 0, 0, 0, 1],
+    ],
+    'Pac-Man': [
+      [0, 1, 1, 1, 1, 1, 0],
+      [1, 1, 1, 1, 1, 1, 1],
+      [1, 1, 0, 0, 0, 1, 1],
+      [1, 1, 1, 1, 0, 1, 1],
+      [1, 1, 1, 0, 0, 1, 1],
+      [1, 1, 0, 0, 0, 1, 1],
+      [1, 1, 1, 1, 1, 1, 1],
+      [0, 1, 1, 1, 1, 1, 0],
+    ],
+    'Mario': [
+      [0, 0, 1, 1, 1, 1, 0, 0],
+      [0, 0, 1, 1, 1, 1, 0, 0],
+      [0, 0, 0, 1, 1, 0, 0, 0],
+      [0, 1, 1, 1, 1, 1, 1, 0],
+      [1, 1, 1, 1, 1, 1, 1, 1],
+      [1, 1, 1, 1, 1, 1, 1, 1],
+      [1, 0, 1, 0, 0, 1, 0, 1],
+      [1, 1, 1, 0, 0, 1, 1, 1],
+    ]
+  };
+  
+  // Colors for pixel art
+  final Map<String, Color> _pixelArtColors = {
+    'Heart': Colors.red,
+    'Smile': Colors.yellow,
+    'Star': Colors.yellow,
+    'Pac-Man': Colors.yellow,
+    'Mario': Colors.red,
+  };
 
   @override
   void onInit() {
@@ -251,9 +335,202 @@ class PanelController extends GetxController {
     selectedColor.value = color;
   }
 
+  // Effect methods
+  void setEffect(String effectName) {
+    // Stop any running effect
+    stopEffect();
+    
+    currentEffect.value = effectName;
+    
+    if (effectName == 'None') {
+      return;
+    }
+    
+    isEffectRunning.value = true;
+    _runEffect();
+  }
+  
+  void stopEffect() {
+    _effectTimer?.cancel();
+    isEffectRunning.value = false;
+    clearAll();
+  }
+  
+  void _runEffect() {
+    if (_effectTimer != null) {
+      _effectTimer!.cancel();
+    }
+
+    if (currentEffect.value == 'None') {
+      isEffectRunning.value = false;
+      return;
+    }
+
+    // Check if it's a pixel art effect
+    if (_pixelArt.containsKey(currentEffect.value)) {
+      _drawPixelArt(currentEffect.value);
+      updatePanel();
+      return;
+    }
+
+    isEffectRunning.value = true;
+    _effectTimer = Timer.periodic(Duration(milliseconds: effectSpeed.value), (timer) {
+      switch (currentEffect.value) {
+        case 'Rainbow':
+          _rainbowEffect();
+          break;
+        case 'Fire':
+          _fireEffect();
+          break;
+        case 'Color Wipe':
+          _colorWipeEffect();
+          break;
+        case 'Theater Chase':
+          _theaterChaseEffect();
+          break;
+        case 'Scanner':
+          _scannerEffect();
+          break;
+      }
+      updatePanel();
+    });
+  }
+  
+  void _drawPixelArt(String artName) {
+    if (!_pixelArt.containsKey(artName)) return;
+    
+    final pattern = _pixelArt[artName]!;
+    final artColor = _pixelArtColors[artName] ?? Colors.white;
+    
+    // Clear the grid
+    for (int row = 0; row < height; row++) {
+      for (int col = 0; col < width; col++) {
+        gridState[row][col].isOn.value = false;
+        gridState[row][col].color.value = Colors.black;
+      }
+    }
+    
+    // Calculate position to center the pixel art
+    int startRow = (height - pattern.length) ~/ 2;
+    int startCol = (width - pattern[0].length) ~/ 2;
+    
+    // Draw the pixel art
+    for (int row = 0; row < pattern.length; row++) {
+      for (int col = 0; col < pattern[row].length; col++) {
+        int targetRow = startRow + row;
+        int targetCol = startCol + col;
+        
+        if (targetRow >= 0 && targetRow < height && targetCol >= 0 && targetCol < width) {
+          if (pattern[row][col] == 1) {
+            gridState[targetRow][targetCol].isOn.value = true;
+            gridState[targetRow][targetCol].color.value = artColor;
+          } else {
+            gridState[targetRow][targetCol].isOn.value = false;
+          }
+        }
+      }
+    }
+  }
+
+  /// Effect implementations
+  void _rainbowEffect() {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final hue = (now / 20) % 360;
+    
+    for (int row = 0; row < height; row++) {
+      for (int col = 0; col < width; col++) {
+        final hueShift = (hue + (row * 10) + (col * 5)) % 360;
+        gridState[row][col].color.value = HSVColor.fromAHSV(1.0, hueShift, 1.0, 1.0).toColor();
+        gridState[row][col].isOn.value = true;
+      }
+    }
+  }
+  
+  void _fireEffect() {
+    // Cool fire effect using noise and color gradients
+    final now = DateTime.now().millisecondsSinceEpoch;
+    
+    for (int row = 0; row < height; row++) {
+      for (int col = 0; col < width; col++) {
+        // Simple noise-based fire effect
+        final noise = (math.sin(now * 0.001 + col * 0.2) + 1) / 2;
+        final heat = (row / height) * noise;
+        
+        // Map heat to color (black -> red -> orange -> yellow -> white)
+        Color color;
+        if (heat < 0.4) {
+          color = Colors.black;
+        } else if (heat < 0.6) {
+          final t = (heat - 0.4) * 5;
+          color = Color.lerp(Colors.red, Colors.orange, t)!;
+        } else if (heat < 0.8) {
+          final t = (heat - 0.6) * 5;
+          color = Color.lerp(Colors.orange, Colors.yellow, t)!;
+        } else {
+          final t = (heat - 0.8) * 5;
+          color = Color.lerp(Colors.yellow, Colors.white, t)!;
+        }
+        
+        gridState[row][col].color.value = color;
+        gridState[row][col].isOn.value = true;
+      }
+    }
+  }
+  
+  void _colorWipeEffect() {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final pos = ((now / 50) % (width * 2)).toInt();
+    
+    for (int row = 0; row < height; row++) {
+      for (int col = 0; col < width; col++) {
+        final index = row * width + col;
+        if (index <= pos && pos - index < width) {
+          gridState[row][col].color.value = effectColor.value;
+          gridState[row][col].isOn.value = true;
+        } else {
+          gridState[row][col].isOn.value = false;
+        }
+      }
+    }
+  }
+  
+  void _theaterChaseEffect() {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final frame = ((now / 100) % 3).toInt();
+    
+    for (int row = 0; row < height; row++) {
+      for (int col = 0; col < width; col++) {
+        if ((row + col + frame) % 3 == 0) {
+          gridState[row][col].color.value = effectColor.value;
+          gridState[row][col].isOn.value = true;
+        } else {
+          gridState[row][col].isOn.value = false;
+        }
+      }
+    }
+  }
+  
+  void _scannerEffect() {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final pos = ((now / 30) % (width * 2 - 2)).toInt();
+    
+    for (int row = 0; row < height; row++) {
+      for (int col = 0; col < width; col++) {
+        final distance = (pos - col).abs();
+        if (distance < 3) {
+          final brightness = 1.0 - (distance / 3.0);
+          gridState[row][col].color.value = effectColor.value.withOpacity(brightness);
+          gridState[row][col].isOn.value = true;
+        } else {
+          gridState[row][col].isOn.value = false;
+        }
+      }
+    }
+  }
+
   @override
   void onClose() {
-    print("🔌 Closing socket connection...");
+    _effectTimer?.cancel();
     _socket?.destroy();
     _socket = null;
     super.onClose();
